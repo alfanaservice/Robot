@@ -1,162 +1,22 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, ContextTypes, filters
-import os
-import traceback
-import asyncio
-import nest_asyncio
-
-nest_asyncio.apply()  # حل مشکل Event Loop در Pydroid
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
 TOKEN = "8204495128:AAGdk27EYC0K9Wy5TNdK9YahBwgTxHOnK2s"
 
-SAVE_FOLDER = "user_files"
-os.makedirs(SAVE_FOLDER, exist_ok=True)
-
-LANG, RECEIVE_CODE, BROADCAST = range(3)
-user_codes = {}
-all_users = set()  # ذخیره آیدی کاربران
-ADMIN_ID = 7503028992
-
-# شروع ربات
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    all_users.add(user_id)
-    
+def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("🇮🇷 فارسی", callback_data='fa')],
-        [InlineKeyboardButton("🇬🇧 English", callback_data='en')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "لطفا زبان خود را انتخاب کنید / Please choose your language:",
-        reply_markup=reply_markup
-    )
-    return LANG
-
-# انتخاب زبان
-async def language_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    context.user_data['lang'] = query.data
-    
-    # کیبورد اصلی با دکمه‌های جدید
-    keyboard = [
-        [InlineKeyboardButton("ثبت تبلیغ", url="https://t.me/amirlphastam")],
-        [InlineKeyboardButton("ارسال پیام", callback_data="broadcast") if query.from_user.id == ADMIN_ID else None]
-    ]
-    keyboard = [row for row in keyboard if row is not None]  # حذف None
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    text = "لطفا کد پایتون خود را ارسال کنید:" if query.data=='fa' else "Please send your Python code:"
-    await query.edit_message_text(text, reply_markup=reply_markup)
-    return RECEIVE_CODE
-
-# دریافت کد کاربر
-async def receive_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    all_users.add(user_id)
-    code = update.message.text
-    user_codes[user_id] = code
-
-    filepath = os.path.join(SAVE_FOLDER, f"{user_id}.py")
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(code)  # اینجا کد پایتون واقعی داخل فایل ذخیره می‌شود
-
-    keyboard = [
-        [InlineKeyboardButton("دریافت کد جدید", callback_data='update')],
-        [InlineKeyboardButton("دریافت کد قدیم", callback_data='old')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    text = "✅ کد دریافت شد" if context.user_data.get('lang')=='fa' else "✅ Code received"
-    await update.message.reply_text(text, reply_markup=reply_markup)
-    return RECEIVE_CODE
-
-# دکمه‌های شیشه‌ای
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    lang = context.user_data.get('lang', 'fa')
-
-    if query.data == 'old':
-        filepath = os.path.join(SAVE_FOLDER, f"{user_id}.py")
-        if os.path.exists(filepath):
-            await query.message.reply_document(document=InputFile(filepath), filename=f"{user_id}.py")
-        else:
-            text = "فایل قدیم موجود نیست ❌" if lang=='fa' else "Old file not found ❌"
-            await query.message.reply_text(text)
-
-    elif query.data == 'update':
-        code = user_codes.get(user_id, "")
-        error = None
-        try:
-            exec(code, {})  # بررسی خطا
-        except Exception as e:
-            error = e
-
-        filepath = os.path.join(SAVE_FOLDER, f"{user_id}.py")
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(code)
-
-        if error:
-            text = f"❌ خطا در کد شما\n{traceback.format_exc()}" if lang=='fa' else f"❌ Error in your code\n{traceback.format_exc()}"
-        else:
-            text = "✅ خطایی ندارد\nفایل پایتون آماده است" if lang=='fa' else "✅ No errors\nPython file is ready"
-            await query.message.reply_document(document=InputFile(filepath), filename=f"{user_id}.py")
-
-        keyboard = [
-            [InlineKeyboardButton("دریافت کد جدید", callback_data='update')],
-            [InlineKeyboardButton("دریافت کد قدیم", callback_data='old')]
+        [
+            InlineKeyboardButton("🧑‍💻 پشتیبانی", url="https://t.me/amirlphastam"),
+            InlineKeyboardButton("💠 کانال تیم سازنده", url="https://t.me/sfgdeveloper")
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.message.reply_text(text, reply_markup=reply_markup)
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.message.reply_text("ربات در حال آپدیت می‌باشد 🔄", reply_markup=reply_markup)
 
-    elif query.data == 'broadcast':
-        if user_id == ADMIN_ID:
-            await query.message.reply_text("پیام خود را وارد کنید / Enter your message:")
-            return BROADCAST
+updater = Updater(TOKEN, use_context=True)
+dp = updater.dispatcher
+dp.add_handler(CommandHandler("start", start))
 
-async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id != ADMIN_ID:
-        return RECEIVE_CODE
-
-    text = update.message.text
-    for uid in all_users:
-        try:
-            await context.bot.send_message(uid, f"📢 پیام ادمین:\n{text}")
-        except:
-            pass
-
-    await update.message.reply_text("پیام برای تمام کاربران ارسال شد ✅")
-    return RECEIVE_CODE
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔴 مکالمه لغو شد / Conversation canceled")
-    return ConversationHandler.END
-
-async def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            LANG: [CallbackQueryHandler(language_choice)],
-            RECEIVE_CODE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_code),
-                CallbackQueryHandler(button)
-            ],
-            BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_message)]
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
-        allow_reentry=True
-    )
-
-    app.add_handler(conv_handler)
-    print("ربات فعال شد ✅")
-    await app.run_polling()
-
-if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(main())
-                
+print("ربات فعال شد ✅")
+updater.start_polling()
+updater.idle()
