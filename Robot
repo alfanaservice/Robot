@@ -16,5 +16,5 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 
-print("ربات فعال شد ✅")
+print("✅ ربات فعال شد")
 app.run_polling()
